@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class SaasGeneratorApplication {
+public class AuthServiceTemplateApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(SaasGeneratorApplication.class, args);
+		SpringApplication.run(AuthServiceTemplateApplication.class, args);
 	}
 
 }
