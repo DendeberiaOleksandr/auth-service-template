@@ -4,17 +4,21 @@ import com.template.authservice.dto.token.TokenDto;
 import com.template.authservice.dto.token.TokenResponse;
 import com.template.authservice.entity.User;
 import com.template.authservice.service.JwtService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.SecretKey;
 import java.security.Key;
 import java.util.Date;
 
 @Service
+@Slf4j
 public class JwtServiceImpl implements JwtService {
 
     @Value("${app.token.secret}")
@@ -42,6 +46,31 @@ public class JwtServiceImpl implements JwtService {
                 refreshTokenExpiration.getTime());
 
         return new TokenResponse(accessToken, refreshToken);
+    }
+
+    @Override
+    public boolean validateToken(String token) {
+        try {
+            Jws<Claims> jws = getJwsFromToken(token);
+            return jws != null;
+        } catch (Exception e) {
+            log.error("Failed to parse JWT", e);
+            return false;
+        }
+    }
+
+    @Override
+    public String getEmailFromToken(String token) {
+        Jws<Claims> jws = getJwsFromToken(token);
+        return jws.getPayload().getSubject();
+    }
+
+    private Jws<Claims> getJwsFromToken(String token) {
+        return Jwts
+                .parser()
+                .verifyWith((SecretKey) getSigningKey())
+                .build()
+                .parseSignedClaims(token);
     }
 
     private String generateToken(User user, Date now, Date expiration) {

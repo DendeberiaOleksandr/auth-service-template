@@ -7,4 +7,8 @@ public interface JwtService {
 
     TokenResponse generateTokens(User user);
 
+    boolean validateToken(String token);
+
+    String getEmailFromToken(String token);
+
 }

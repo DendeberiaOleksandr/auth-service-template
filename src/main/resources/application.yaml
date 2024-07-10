@@ -10,7 +10,7 @@ spring:
     generate-ddl: false
     hibernate:
       ddl-auto: none
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
 flyway:
   url: jdbc:postgresql://localhost:5432/auth_service_template
   schemas: auth_service_template
