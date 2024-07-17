@@ -27,11 +27,8 @@ public class ResetPasswordServiceImpl implements ResetPasswordService {
     private final CodeGenerator codeGenerator;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.reset.password.maxAttempts:3}")
     private int maxResetPasswordAttempts;
-
-    @Value("${app.reset.password.failedEnterAttempts:3}")
-    private int failedEnterAttempts;
+    private int maxFailedCodeEnteringAttempts;
 
     @Transactional
     @Override
@@ -48,16 +45,23 @@ public class ResetPasswordServiceImpl implements ResetPasswordService {
         user.setResetPasswordSentTimes(++resetPasswordSentTimes);
         userService.save(user);
 
-        publisher.publishEvent(new EmailResetPasswordEvent(this, code, email));
+        publisher.publishEvent(new EmailResetPasswordEvent(this, email, code));
     }
 
     private void validateResetPassword(User user) {
-        LocalDateTime resetPasswordCodeLastSentAt = user.getResetPasswordCodeLastSentAt();
-        if (user.getResetPasswordSentTimes() >= maxResetPasswordAttempts &&
-                resetPasswordCodeLastSentAt != null && resetPasswordCodeLastSentAt.plusMinutes(5L).isBefore(LocalDateTime.now())) {
-            throw new ValidationException("You have exceeded reset password attempts. Please try again after %s"
-                    .formatted(resetPasswordCodeLastSentAt.plusMinutes(5L).format(DateTimeFormatter.ISO_DATE_TIME)));
+
+        if (user.getResetPasswordSentTimes() >= maxResetPasswordAttempts) {
+
+            LocalDateTime resetPasswordCodeLastSentAt = user.getResetPasswordCodeLastSentAt();
+            if (resetPasswordCodeLastSentAt != null && resetPasswordCodeLastSentAt.plusMinutes(5L).isAfter(LocalDateTime.now())) {
+                throw new ValidationException("You have exceeded reset password attempts. Please try again after %s"
+                        .formatted(resetPasswordCodeLastSentAt.plusMinutes(5L).format(DateTimeFormatter.ISO_DATE_TIME)));
+            } else {
+                user.setResetPasswordSentTimes(0);
+            }
+
         }
+
     }
 
     @Transactional
@@ -74,26 +78,43 @@ public class ResetPasswordServiceImpl implements ResetPasswordService {
             user.setInvalidResetPasswordCodeEnteredLastTimeAt(null);
             String newPassword = passwordEncoder.encode(request.password());
             user.setPassword(newPassword);
+            userService.save(user);
+            return;
         } else {
             int resetPasswordCodeEnteredTimes = user.getInvalidResetPasswordCodeEnteredTimes() + 1;
-            user.setResetPasswordSentTimes(resetPasswordCodeEnteredTimes);
+            user.setInvalidResetPasswordCodeEnteredTimes(resetPasswordCodeEnteredTimes);
             user.setInvalidResetPasswordCodeEnteredLastTimeAt(LocalDateTime.now());
+            userService.save(user);
         }
 
-        userService.save(user);
         throw new ValidationException("You have entered an invalid reset password code");
     }
 
     private void validateChangePassword(User user) {
         int invalidResetPasswordCodeEnteredTimes = user.getInvalidResetPasswordCodeEnteredTimes() + 1;
-        LocalDateTime invalidResetPasswordCodeEnteredLastTimeAt = user.getInvalidResetPasswordCodeEnteredLastTimeAt();
-        if (invalidResetPasswordCodeEnteredTimes >= failedEnterAttempts &&
-                invalidResetPasswordCodeEnteredLastTimeAt != null &&
-                invalidResetPasswordCodeEnteredLastTimeAt.plusMinutes(5L).isBefore(LocalDateTime.now())) {
-            throw new ValidationException("You have exceeded reset password code entering attempts. Please try again after %s"
-                    .formatted(invalidResetPasswordCodeEnteredLastTimeAt.plusMinutes(5L).format(DateTimeFormatter.ISO_DATE_TIME)));
+
+        if (invalidResetPasswordCodeEnteredTimes >= maxFailedCodeEnteringAttempts) {
+
+            LocalDateTime invalidResetPasswordCodeEnteredLastTimeAt = user.getInvalidResetPasswordCodeEnteredLastTimeAt();
+            if (invalidResetPasswordCodeEnteredLastTimeAt != null &&
+                    invalidResetPasswordCodeEnteredLastTimeAt.plusMinutes(5L).isAfter(LocalDateTime.now())) {
+                throw new ValidationException("You have exceeded reset password code entering attempts. Please try again after %s"
+                        .formatted(invalidResetPasswordCodeEnteredLastTimeAt.plusMinutes(5L).format(DateTimeFormatter.ISO_DATE_TIME)));
+            } else {
+                user.setInvalidResetPasswordCodeEnteredTimes(0);
+            }
+
         }
-        user.setInvalidResetPasswordCodeEnteredTimes(0);
+    }
+
+    @Value("${app.reset.password.maxResetPasswordAttempts:3}")
+    public void setMaxResetPasswordAttempts(int maxResetPasswordAttempts) {
+        this.maxResetPasswordAttempts = maxResetPasswordAttempts;
+    }
+
+    @Value("${app.reset.password.maxFailedCodeEnteringAttempts:3}")
+    public void setMaxFailedCodeEnteringAttempts(int maxFailedCodeEnteringAttempts) {
+        this.maxFailedCodeEnteringAttempts = maxFailedCodeEnteringAttempts;
     }
 
 }
